@@ -1,0 +1,69 @@
+---
+title: "POST /api/xuxemons/{pivot_id}/feed — Feed a Xoxemon"
+description: "Feed a Xoxemon one sweet from your inventory. Increments food_eaten, triggers evolution if the threshold is reached, and rolls for a random disease."
+---
+
+Feeding a Xoxemon consumes one sweet item from your inventory, increments the creature's `food_eaten` counter, and checks for evolution. If the food threshold is reached the Xoxemon evolves to the next size and `food_eaten` resets to 0. If no evolution occurs, the backend rolls dice for a random disease based on the current global probability settings.
+
+**`POST /api/xuxemons/{pivot_id}/feed`** — Requires `Authorization: Bearer <token>`.
+
+Use the `pivot.id` value from `GET /api/xuxedex` as `{pivot_id}`.
+
+## Evolution thresholds
+
+| Current size | Sweets needed | Effect of `Bajón de azúcar` disease |
+|---|---|---|
+| `Petit` (Small) | 3 | +2 (5 total) |
+| `Mitja` (Medium) | 5 | +2 (7 total) |
+| `Gran` (Large) | — | Cannot evolve further |
+
+## Request body
+
+<ParamField body="item_id" type="integer" required>
+  The ID of the sweet item to consume from your inventory. Must be of type `xuxe` and you must have at least 1 in stock.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  `"El teu Xuxemon ha evolucionat!"` if evolved, otherwise `"Xuxemon alimentat correctament!"`.
+</ResponseField>
+<ResponseField name="food_eaten" type="integer">
+  Updated `food_eaten` counter after feeding (resets to 0 on evolution).
+</ResponseField>
+<ResponseField name="evolved" type="boolean">
+  `true` if the Xoxemon evolved this turn.
+</ResponseField>
+<ResponseField name="disease" type="string|null">
+  Current disease after the feed action (`null` if healthy or just evolved).
+</ResponseField>
+
+## Example
+
+```bash
+curl -X POST http://localhost:8000/api/xuxemons/12/feed \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..." \
+  -H "Content-Type: application/json" \
+  -d '{"item_id": 1}'
+```
+
+```json
+{
+  "message": "Xuxemon alimentat correctament!",
+  "food_eaten": 2,
+  "evolved": false,
+  "disease": null
+}
+```
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Xoxemon has `Atracón` disease — vaccinate it first. |
+| `400` | Not enough sweets of the specified type in inventory. |
+| `404` | `pivot_id` not found in your collection. |
+
+<Warning>
+  Each feed attempt rolls for disease. There is no way to preview or cancel the roll — feeding always carries risk.
+</Warning>

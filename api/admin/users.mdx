@@ -1,0 +1,37 @@
+---
+title: "GET /api/admin/users — List all player accounts"
+description: "Returns a lightweight list of all registered player accounts (id, name, custom_id) for use in the admin dashboard's player selector."
+---
+
+The admin users endpoint returns a minimal list of all player accounts in the system. It is used by the admin dashboard to populate the player dropdown when giving items or Xoxemons. Only the fields needed for display are returned — no sensitive data like email or password hashes.
+
+**`GET /api/admin/users`** — Requires `Authorization: Bearer <token>` with role `robot`.
+
+## Response
+
+Returns a JSON array of user objects.
+
+<ResponseField name="id" type="integer">Database ID — use this as `user_id` in give-item and give-xuxemon requests.</ResponseField>
+<ResponseField name="name" type="string">Player's first name.</ResponseField>
+<ResponseField name="custom_id" type="string">Unique identifier, e.g. `Marc#4721`.</ResponseField>
+
+## Example
+
+```bash
+curl http://localhost:8000/api/admin/users \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..."
+```
+
+```json
+[
+  { "id": 1, "name": "Admin", "custom_id": "Admin#0000" },
+  { "id": 2, "name": "Marc",  "custom_id": "Marc#4721" }
+]
+```
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `401` | Missing or invalid token. |
+| `403` | Authenticated user does not have the `robot` role. |

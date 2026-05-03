@@ -1,0 +1,83 @@
+---
+title: "POST /api/login — Authenticate with your custom ID"
+description: "Log in to Xoxemons using your custom_id (e.g. Marc#4721) and password. Returns a JWT bearer token for use on all authenticated endpoints."
+---
+
+The login endpoint authenticates a player using their `custom_id` and password. On success it returns a JWT bearer token that must be included in the `Authorization` header of every subsequent request. The Angular frontend stores this token in `localStorage` and automatically attaches it to API calls via an HTTP interceptor.
+
+**`POST /api/login`** — Public. No authentication required.
+
+## Request body
+
+<ParamField body="custom_id" type="string" required>
+  The player's unique identifier, in the format `Name#XXXX` (e.g. `Marc#4721`). This is shown on the profile page and is generated at registration.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The account password.
+</ParamField>
+
+## Response
+
+Returns `200 OK` on success.
+
+<ResponseField name="access_token" type="string">
+  The JWT bearer token. Include this in every authenticated request as `Authorization: Bearer <access_token>`.
+</ResponseField>
+
+<ResponseField name="token_type" type="string">
+  Always `"bearer"`.
+</ResponseField>
+
+<ResponseField name="expires_in" type="integer">
+  Token lifetime in seconds (e.g. `3600` for one hour).
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The authenticated user's profile.
+  <Expandable title="user fields">
+    <ResponseField name="id" type="integer">Database ID.</ResponseField>
+    <ResponseField name="custom_id" type="string">Unique player identifier.</ResponseField>
+    <ResponseField name="name" type="string">First name.</ResponseField>
+    <ResponseField name="role" type="string">`player` or `robot`.</ResponseField>
+    <ResponseField name="coins" type="integer">Current coin balance.</ResponseField>
+    <ResponseField name="last_daily_reward" type="string|null">Timestamp of last daily claim, or `null`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example
+
+```bash
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "custom_id": "Marc#4721",
+    "password": "secret123"
+  }'
+```
+
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "user": {
+    "id": 5,
+    "custom_id": "Marc#4721",
+    "name": "Marc",
+    "role": "player",
+    "coins": 0,
+    "last_daily_reward": null
+  }
+}
+```
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `401` | Invalid `custom_id` or wrong password. |
+
+<Note>
+  Xoxemons uses `custom_id` (not email) for login. If you forget your `custom_id`, it is visible on your profile page after logging in via the app.
+</Note>

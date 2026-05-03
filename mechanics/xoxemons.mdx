@@ -1,0 +1,148 @@
+---
+title: "Xoxemons: growth stages, evolution, and diseases"
+description: "Discover how Xoxemons grow through three size stages, how feeding triggers evolution, and how the disease system adds risk to every meal."
+---
+
+Every Xoxemon you own is a living instance — it has its own hunger counter, a current size, and potentially a disease that affects how it grows. When you feed a Xoxemon it inches closer to evolving, but each meal also carries a small chance of illness. Managing that risk is at the heart of the Xoxemons experience.
+
+## Growth stages
+
+Xoxemons grow through three sizes: **Small** (Petit), **Medium** (Mitja), and **Large** (Gran). Size is stored on the `user_xuxemons` pivot row, not on the base creature catalogue, so each player's copy of the same species can be at a different stage.
+
+<CardGroup cols={3}>
+  <Card title="Small" icon="seedling">
+    Starting size. Feed **3 sweets** to trigger evolution to Medium.
+  </Card>
+  <Card title="Medium" icon="tree">
+    Mid tier. Feed **5 sweets** to trigger evolution to Large. Adds **+1** to battle rolls.
+  </Card>
+  <Card title="Large" icon="mountain">
+    Maximum size. Cannot evolve further. Adds **+2** to battle rolls.
+  </Card>
+</CardGroup>
+
+If a Xoxemon has the **Bajón de azúcar** disease when you feed it, the threshold increases by 2 sweets for that evolution step. A Small Xoxemon with Bajón needs 5 sweets to reach Medium instead of 3.
+
+## Evolution mechanic
+
+Every time you feed a Xoxemon, the backend runs this sequence:
+
+<Steps>
+  <Step title="Consume a sweet">
+    One unit of the selected sweet item is deducted from your inventory (`user_items.quantity -= 1`).
+  </Step>
+  <Step title="Increment food_eaten">
+    The `food_eaten` counter on the `user_xuxemons` row is incremented by 1.
+  </Step>
+  <Step title="Check the evolution threshold">
+    The backend looks up the base species size from `xuxemons.size` and calculates the required food:
+    - Small → Medium: 3 sweets (or 5 with Bajón)
+    - Medium → Large: 5 sweets (or 7 with Bajón)
+    - Large: no further evolution
+  </Step>
+  <Step title="Evolve if threshold reached">
+    If `food_eaten >= required`, the backend finds the next-size Xuxemon of the **same type** and updates `xuxemon_id` on the pivot row. `food_eaten` resets to 0 and any active disease is cleared — evolution acts as a biological reset.
+  </Step>
+  <Step title="Roll for disease (if no evolution)">
+    If the Xoxemon did not evolve this turn, the infection dice are rolled (see below).
+  </Step>
+</Steps>
+
+```php
+// XuxemonController.php — evolution threshold logic
+if ($currentXuxemon->size === 'Petit') {
+    $nextSize     = 'Mitja';
+    $requiredFood = 3;
+} elseif ($currentXuxemon->size === 'Mitja') {
+    $nextSize     = 'Gran';
+    $requiredFood = 5;
+}
+
+if ($userXuxemon->disease === 'Bajón de azúcar') {
+    $requiredFood += 2;
+}
+```
+
+## Disease system
+
+Each feeding that does **not** trigger evolution runs a probability check against three configurable values stored in the `settings` table. Default probabilities are set by the seeder:
+
+| Disease | Default probability | Effect |
+|---|---|---|
+| Atracón | 10% | Blocks feeding entirely until cured |
+| Sobredosis de sucre | 5% | No mechanical penalty (cosmetic / future use) |
+| Bajón de azúcar | 5% | +2 sweets required to evolve |
+
+The check is cumulative: a random number 1–100 is compared against each threshold in order.
+
+```php
+// XuxemonController.php — infection roll
+$chance = rand(1, 100);
+if ($chance <= $probAtracon) {
+    $userXuxemon->disease = 'Atracón';
+} elseif ($chance <= ($probAtracon + $probSobredosis)) {
+    $userXuxemon->disease = 'Sobredosis de sucre';
+} elseif ($chance <= ($probAtracon + $probSobredosis + $probBajon)) {
+    $userXuxemon->disease = 'Bajón de azúcar';
+}
+```
+
+### Curing diseases
+
+Each disease has a matching vaccine in your inventory. Use `POST /api/xuxemons/{pivot_id}/vaccinate` with the `item_id` of the vaccine:
+
+<AccordionGroup>
+  <Accordion title="Atracón — cured by Xal de fruites">
+    The Xoxemon refuses to eat until cured. Apply a **Xal de fruites** vaccine to restore feeding.
+  </Accordion>
+  <Accordion title="Sobredosis de sucre — cured by Inxulina">
+    No evolution penalty, but the creature is still diseased and blocked from battle. Apply **Inxulina** to clear it.
+  </Accordion>
+  <Accordion title="Bajón de azúcar — cured by Xocolatina">
+    The evolution threshold increases by +2 sweets. Use **Xocolatina** to remove the penalty and restore normal thresholds.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  **Inxulina** is a universal vaccine — it cures any disease regardless of type, making it the most versatile medical item in the game.
+</Tip>
+
+## Xuxedex
+
+Your Xuxedex is the full list of every Xoxemon you own. Access it at `GET /api/xuxedex`. Each entry combines data from the base `xuxemons` catalogue and the live `user_xuxemons` pivot:
+
+| Field | Source | Description |
+|---|---|---|
+| `name` | `xuxemons` | Species name (e.g. Gotiró, Bassiol) |
+| `type` | `xuxemons` | Elemental type: Aigua, Terra, or Aire |
+| `image` | `xuxemons` | Asset path for the sprite |
+| `size` | `xuxemons` | Current size: Petit, Mitja, or Gran |
+| `food_eaten` | `user_xuxemons` | Sweets eaten since last evolution |
+| `disease` | `user_xuxemons` | Active disease, or `null` if healthy |
+
+## Elemental types
+
+The game has three elements arranged in a triangle. Type matchups matter in PVP battles (see [PVP battles](/mechanics/battle) for the full calculation):
+
+<CardGroup cols={3}>
+  <Card title="Aigua (Water)" icon="droplets">
+    Beats Terra. Loses to Aire.
+  </Card>
+  <Card title="Terra (Earth)" icon="mountain">
+    Beats Aire. Loses to Aigua.
+  </Card>
+  <Card title="Aire (Air)" icon="wind">
+    Beats Aigua. Loses to Terra.
+  </Card>
+</CardGroup>
+
+There are 18 species in total: 3 types × 3 sizes × 2 evolution families per type.
+
+## Daily reward
+
+Once every 24 hours you can claim a free reward from the main hub. The reward gives you:
+
+- 1 random Xoxemon (Small size, no disease)
+- 10 sweets
+
+The timestamp of your last claim is stored on your user record (`last_daily_reward`). Attempting to claim again before 24 hours have passed returns a cooldown error.

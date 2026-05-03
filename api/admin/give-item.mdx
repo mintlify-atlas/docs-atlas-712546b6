@@ -1,0 +1,83 @@
+---
+title: "Admin: give items and Xoxemons to players"
+description: "Admin endpoints to add items (sweets or vaccines) and random Xoxemons to any player's account. Both endpoints enforce the 20-slot backpack limit."
+---
+
+These admin endpoints let a `robot`-role user add inventory items or a random Xoxemon to any player's account. The give-item endpoint respects the 20-slot backpack limit and rejects requests when the player's inventory is full. Both endpoints require a valid admin JWT token.
+
+All endpoints require `Authorization: Bearer <token>` with role `robot`.
+
+---
+
+## Give an item to a player
+
+**`POST /api/admin/give-item`**
+
+Adds a specified quantity of a sweet or vaccine to a player's backpack. If the item already exists in the player's inventory, the quantity is incremented. If the backpack is full (20 slots occupied), the request is rejected.
+
+<ParamField body="user_id" type="integer" required>
+  The `id` of the target player (from `GET /api/admin/users`).
+</ParamField>
+
+<ParamField body="item_type" type="string" required>
+  Must be `xuxe` (sweet) or `vacuna` (vaccine).
+</ParamField>
+
+<ParamField body="item_name" type="string" required>
+  The name of the item. If an item with this name and type does not exist in the `items` catalogue, it is created automatically.
+</ParamField>
+
+<ParamField body="quantity" type="integer" required>
+  Number of units to give. Minimum 1.
+</ParamField>
+
+**Response:**
+
+```json
+{ "message": "Ítem afegit correctament a la motxilla!" }
+```
+
+**Errors:**
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Player's backpack is full (20/20 slots). |
+| `422` | Validation failed — missing or invalid fields. |
+
+---
+
+## Give a random Xoxemon to a player
+
+**`POST /api/admin/give-xuxemon`**
+
+Assigns a randomly selected Xoxemon from the catalogue to the target player. The Xoxemon is added with `food_eaten = 0` and no disease.
+
+<ParamField body="user_id" type="integer" required>
+  The `id` of the target player.
+</ParamField>
+
+**Response:**
+
+```json
+{ "message": "Has regalat el Xuxemon: Aquariu" }
+```
+
+**Errors:**
+
+| Status | Meaning |
+|--------|---------|
+| `404` | No Xoxemons exist in the database (run seeders first). |
+
+## Example
+
+```bash
+curl -X POST http://localhost:8000/api/admin/give-item \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 2,
+    "item_type": "xuxe",
+    "item_name": "Xuxe de maduixa",
+    "quantity": 10
+  }'
+```

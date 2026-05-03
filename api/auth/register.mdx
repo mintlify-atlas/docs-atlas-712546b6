@@ -1,0 +1,93 @@
+---
+title: "POST /api/register — Create a new account"
+description: "Register a new Xoxemons player account. Provide name, surnames, email, and password. Returns a 201 response with the new user object on success."
+---
+
+The register endpoint creates a new player account and assigns a unique `custom_id` in the format `Name#XXXX` (e.g. `Marc#4721`). This ID is used instead of email for all future logins. The first account registered on a fresh database automatically receives the `robot` (admin) role; all subsequent accounts receive the `player` role.
+
+**`POST /api/register`** — Public. No authentication required.
+
+## Request body
+
+<ParamField body="name" type="string" required>
+  The player's first name. Used to generate the `custom_id` (spaces are stripped).
+</ParamField>
+
+<ParamField body="surnames" type="string" required>
+  The player's surname(s). Stored for display but not used in login.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  A valid, unique email address. Maximum 255 characters.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Minimum 6 characters. Must be confirmed by also sending `password_confirmation` with the same value.
+</ParamField>
+
+<ParamField body="password_confirmation" type="string" required>
+  Must match `password` exactly.
+</ParamField>
+
+## Response
+
+Returns `201 Created` on success.
+
+<ResponseField name="message" type="string">
+  Confirmation message, e.g. `"Usuari registrat correctament!"`.
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The newly created user record.
+  <Expandable title="user fields">
+    <ResponseField name="id" type="integer">Unique database ID.</ResponseField>
+    <ResponseField name="custom_id" type="string">Auto-generated unique identifier, e.g. `Marc#4721`.</ResponseField>
+    <ResponseField name="name" type="string">First name.</ResponseField>
+    <ResponseField name="surnames" type="string">Surname(s).</ResponseField>
+    <ResponseField name="email" type="string">Email address.</ResponseField>
+    <ResponseField name="role" type="string">`player` or `robot`.</ResponseField>
+    <ResponseField name="coins" type="integer">Starting coin balance (0).</ResponseField>
+    <ResponseField name="created_at" type="string">ISO 8601 timestamp.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example
+
+```bash
+curl -X POST http://localhost:8000/api/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Marc",
+    "surnames": "Frances",
+    "email": "marc@example.com",
+    "password": "secret123",
+    "password_confirmation": "secret123"
+  }'
+```
+
+```json
+{
+  "message": "Usuari registrat correctament!",
+  "user": {
+    "id": 5,
+    "custom_id": "Marc#4721",
+    "name": "Marc",
+    "surnames": "Frances",
+    "email": "marc@example.com",
+    "role": "player",
+    "coins": 0,
+    "created_at": "2024-10-01T10:00:00.000000Z"
+  }
+}
+```
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Validation failed — check each field error in the response body. |
+| `400` | `email` is already registered. |
+
+<Note>
+  Save the `custom_id` from the response — players use it (not email) to log in.
+</Note>

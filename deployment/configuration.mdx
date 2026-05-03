@@ -1,0 +1,130 @@
+---
+title: "Backend environment configuration"
+description: "Configure Xoxemons' Laravel backend using the .env file. Covers database connection, JWT secret, app key, and CORS settings for the Angular frontend."
+---
+
+The Laravel backend reads all runtime configuration from a single `.env` file in the `backend/` directory. Before starting the stack you must copy `.env.example` to `.env` and review the values below — most defaults work out of the box with Docker Compose, but several secrets **must** be generated before going to production.
+
+## Full `.env.example`
+
+```ini
+APP_NAME=Laravel
+APP_ENV=local
+APP_KEY=base64:c+XqdyBF43Ro9R0zqPD3YOG79C/URzEHwDURJVjb/bM=
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+APP_LOCALE=en
+APP_FALLBACK_LOCALE=en
+APP_FAKER_LOCALE=en_US
+
+APP_MAINTENANCE_DRIVER=file
+
+BCRYPT_ROUNDS=12
+
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=debug
+
+DB_CONNECTION=mysql
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=backend
+DB_USERNAME=root
+DB_PASSWORD=root
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=null
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=database
+
+CACHE_STORE=database
+
+MEMCACHED_HOST=127.0.0.1
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=log
+MAIL_SCHEME=null
+MAIL_HOST=127.0.0.1
+MAIL_PORT=2525
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_FROM_ADDRESS="hello@example.com"
+MAIL_FROM_NAME="${APP_NAME}"
+
+VITE_APP_NAME="${APP_NAME}"
+
+JWT_SECRET=XfuXQmsvIKJnSyCbMgCtxUMDzEyRhSYPDujMxMwG1oDEd0NaVxMNSoEZXRhtARmT
+```
+
+---
+
+## Variable reference
+
+### App settings
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_NAME` | `Laravel` | Application name, used in emails and notifications. |
+| `APP_ENV` | `local` | Environment name. Set to `production` in live deployments. |
+| `APP_KEY` | *(see example)* | 32-byte base64 key used for encryption and cookie signing. |
+| `APP_DEBUG` | `true` | Enables detailed error pages. **Set to `false` in production.** |
+| `APP_URL` | `http://localhost:8000` | Public URL of the API. The Angular frontend uses this as its base URL. |
+
+<Note>
+  Run `php artisan key:generate` inside the backend container after copying `.env.example`. This replaces the placeholder `APP_KEY` with a fresh cryptographically secure value unique to your installation.
+</Note>
+
+### Database
+
+The default values match the `db` service defined in `docker-compose.yml` exactly. If you change any of these, update `docker-compose.yml`'s `environment` block to match.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_CONNECTION` | `mysql` | Database driver. MySQL 8.0 is the only supported driver. |
+| `DB_HOST` | `db` | Hostname of the database container (the Docker Compose service name). |
+| `DB_PORT` | `3306` | MySQL port inside the Docker network. |
+| `DB_DATABASE` | `backend` | Database name created automatically by the `db` container on first boot. |
+| `DB_USERNAME` | `root` | MySQL user. Matches `MYSQL_ROOT_PASSWORD` in `docker-compose.yml`. |
+| `DB_PASSWORD` | `root` | MySQL password. **Change this for any internet-facing deployment.** |
+
+### JWT
+
+| Variable | Default | Description |
+|---|---|---|
+| `JWT_SECRET` | *(see example)* | HMAC secret used to sign and verify JSON Web Tokens for API authentication. |
+
+<Note>
+  Generate a fresh `JWT_SECRET` by running `php artisan jwt:secret` inside the backend container. This overwrites the value in your `.env` automatically.
+</Note>
+
+### Session, cache, and queue
+
+These variables use the `database` driver by default, which stores sessions and queued jobs in MySQL. No additional infrastructure (Redis, Memcached) is required for a standard Docker Compose deployment.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SESSION_DRIVER` | `database` | Safe for single-server deployments. |
+| `CACHE_STORE` | `database` | No external cache server needed. |
+| `QUEUE_CONNECTION` | `database` | Background jobs run via MySQL. |
+
+### Production checklist
+
+Before exposing the application to the internet, change the following:
+
+- `APP_ENV` → `production`
+- `APP_DEBUG` → `false`
+- `APP_KEY` → regenerate with `php artisan key:generate`
+- `DB_PASSWORD` → a strong, unique password (update `docker-compose.yml` to match)
+- `JWT_SECRET` → regenerate with `php artisan jwt:secret`
+- `APP_URL` → your real public domain

@@ -1,0 +1,177 @@
+---
+title: "System architecture and tech stack"
+description: "Explore how Xoxemons wires together an Angular 17+ frontend, Laravel 11 backend, and MySQL 8 database in isolated Docker Compose containers."
+---
+
+Xoxemons follows a decoupled client-server architecture where the frontend and backend run in separate containers and communicate exclusively through HTTP with JSON payloads. Neither layer has direct knowledge of the other's internals — the Angular app calls REST endpoints, and the Laravel API returns standardised JSON responses.
+
+## Tech stack overview
+
+<CardGroup cols={2}>
+  <Card title="Frontend" icon="browser">
+    **Angular 17+** with standalone components, no legacy `NgModules`. RxJS powers reactive state with `BehaviorSubject` streams. TypeScript throughout with strict mode enabled.
+  </Card>
+  <Card title="Backend" icon="server">
+    **Laravel 11** using Eloquent ORM for database access. Authentication via **JWT** bearer tokens (`tymon/jwt-auth`).
+  </Card>
+  <Card title="Database" icon="database">
+    **MySQL 8.0** with a normalised relational schema. Pivot tables carry extra state columns (size, disease, quantity) beyond simple join keys.
+  </Card>
+  <Card title="Infrastructure" icon="docker">
+    **Docker Compose** orchestrates four services: `db`, `adminer`, `backend`, and `frontend`. Each service restarts automatically and communicates over the default Compose network.
+  </Card>
+</CardGroup>
+
+## Docker Compose services
+
+| Service | Image / Build | Host port | Purpose |
+|---------|--------------|-----------|---------|
+| `db` | `mysql:8.0` | `3306` | MySQL database |
+| `adminer` | `adminer` | `8080` | Web-based DB browser |
+| `backend` | `./backend` (PHP 8.2 Apache) | `8000 → 80` | Laravel API |
+| `frontend` | `./frontend` (Node 20 + Angular CLI) | `4200` | Angular dev server |
+
+The `frontend` depends on `backend`, and `backend` and `adminer` depend on `db`. The MySQL data volume (`db_data`) persists the database across container restarts.
+
+## Frontend architecture
+
+The Angular application lives in `frontend/src/app/` and follows a **Smart/Dumb Components** pattern. Smart components own state and make service calls; dumb components receive data through `@Input()` bindings and emit events upward.
+
+### Directory layout
+
+```text
+frontend/src/app/
+├── app.config.ts          # Router and global HTTP interceptors
+├── app.html & app.ts      # Root shell component (<router-outlet>)
+├── components/            # Smart components (one per feature view)
+│   ├── admin/             # Admin dashboard (role: robot only)
+│   ├── battle/            # PVP battle engine and UI
+│   ├── chat/              # Direct messaging and auto-scroll
+│   ├── friends/           # Reactive user search
+│   ├── inventory/         # 20-slot backpack with stacking logic
+│   ├── loading/           # Global full-screen loading overlay
+│   ├── login/ & register/ # Authentication entry points
+│   ├── main/              # Player hub and daily reward
+│   ├── profile/           # Account update and cascade delete
+│   └── xuxedex/           # Feed, heal, and list Xoxemons
+├── guards/
+│   ├── auth-guard.ts      # Checks for a local JWT token
+│   └── admin.guard.ts     # Async backend check for role = 'robot'
+├── interceptors/
+│   └── auth.interceptor.ts # Attaches JWT as Authorization: Bearer header
+└── services/              # Singleton API wrappers (root-provided)
+    ├── auth.ts
+    ├── battle.service.ts
+    ├── chat.service.ts
+    ├── friend.service.ts
+    ├── inventory.service.ts
+    ├── loading.ts
+    └── xuxemon.service.ts
+```
+
+### State management with BehaviorSubjects
+
+Services act as the single source of truth for shared state. Each service exposes a `BehaviorSubject` observable rather than returning one-shot HTTP responses. Components subscribe to these streams, so any mutation — for example, consuming a vaccine inside the Xuxedex modal — instantly re-renders every other component that is subscribed to the same inventory stream.
+
+This pattern eliminates the need for a dedicated state management library and keeps data synchronised across views without manual refresh calls.
+
+### Route guards
+
+- **`auth-guard.ts`** — Allows navigation only if a JWT token exists in `localStorage`. Used on all authenticated routes.
+- **`admin.guard.ts`** — Makes a hidden API call to confirm the authenticated user's database role is `robot`. Blocks route entry even if someone manually sets a fake token with the right local claim.
+
+## Backend architecture
+
+The Laravel backend follows standard MVC structure with extra emphasis on explicit pivot models to represent the game's ownership relationships.
+
+### Key controllers
+
+| Controller | Responsibility |
+|------------|----------------|
+| `AuthController` | Register, login (issues JWT token), logout, `/me` profile |
+| `XuxemonController` | List user's Xoxemons with pivot data, handle feed and vaccinate actions |
+| `InventoryController` | Return items with quantity, update after consumption |
+| `BattleController` | Transfer Xoxemon ownership from loser to winner in a single DB transaction |
+| `AdminController` | Give items to players, update global disease settings (requires `robot` middleware) |
+
+### Pivot models
+
+A standard many-to-many join table only records which user owns which Xoxemon. Xoxemons needs more: size, how much food was eaten, and current disease. Laravel's explicit intermediate models (`UserXuxemon` and `UserItem`) add these columns to the pivot records.
+
+- **`UserXuxemon`** — Fields: `user_id`, `xuxemon_id`, `size` (`Petit` / `Mitja` / `Gran`), `food_eaten`, `disease` (nullable string)
+- **`UserItem`** — Fields: `user_id`, `item_id`, `quantity`
+
+All queries that load Xoxemons or items use Eloquent **eager loading** (`with()`) to avoid N+1 query problems.
+
+## Database schema
+
+The relational schema is implemented via Laravel migrations. Tables with a `(Pivot)` label carry extra state beyond foreign keys.
+
+```text
+[ users ]
+  ├── id (PK)
+  ├── custom_id (unique string, e.g. "Jan#1001")
+  ├── name, surnames, email, password (bcrypt)
+  ├── role ('player' | 'robot')
+  ├── coins (int)
+  └── last_daily_reward (timestamp)
+
+[ xuxemons ]  — master catalogue
+  ├── id (PK)
+  ├── name, type, image
+  └── base_stats…
+
+[ items ]  — master catalogue
+  ├── id (PK)
+  ├── name, type ('xuxe' | 'vacuna')
+  └── is_stackable (boolean)
+
+[ user_xuxemons ]  — N:M pivot, live creature instances
+  ├── id (pivot PK)
+  ├── user_id (FK → users)
+  ├── xuxemon_id (FK → xuxemons)
+  ├── size ('Petit' | 'Mitja' | 'Gran')
+  ├── food_eaten (int)
+  └── disease (string, nullable)
+
+[ user_items ]  — N:M pivot, player backpack
+  ├── user_id (FK → users)
+  ├── item_id (FK → items)
+  └── quantity (int)
+
+[ friendships ]
+  ├── user_id_1 (FK — requester)
+  ├── user_id_2 (FK — receiver)
+  └── status ('pending' | 'accepted')
+
+[ messages ]
+  ├── sender_id (FK → users)
+  ├── receiver_id (FK → users)
+  ├── content (text)
+  └── created_at (timestamp)
+
+[ settings ]  — global game balance
+  └── atracon_prob, sobredosis_prob, bajon_prob (int, percentage)
+```
+
+## Communication patterns
+
+All data exchange between the Angular frontend and the Laravel backend uses **HTTP REST** with JSON bodies. There are no WebSockets or server-sent events in the current release.
+
+### Authentication
+
+Every authenticated request includes the JWT in the HTTP `Authorization` header:
+
+```
+Authorization: Bearer <token>
+```
+
+The `auth.interceptor.ts` attaches this header automatically to all outgoing `HttpClient` requests.
+
+### Chat polling
+
+Because the application does not use WebSockets, the chat component simulates real-time messaging with **short polling**: an RxJS interval fires an HTTP `GET /api/chat/{friendId}` request every **2000 ms**. The interval is created in `ngOnInit` and destroyed in `ngOnDestroy` to prevent memory leaks when the user navigates away.
+
+<Warning>
+  The polling loop must be cleared on component destruction. Failing to call `clearInterval` (or unsubscribe from the RxJS timer) in `ngOnDestroy` causes the HTTP calls to continue running in the background, which increases database load and can cause stale data bugs.
+</Warning>

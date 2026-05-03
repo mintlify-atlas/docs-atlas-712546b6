@@ -1,0 +1,58 @@
+---
+title: "POST /api/xuxemons/{pivot_id}/vaccinate — Cure disease"
+description: "Apply a vaccine from your inventory to cure a Xoxemon's active disease. Each vaccine cures a specific disease; Inxulina cures any disease."
+---
+
+The vaccinate endpoint applies a vaccine item from your inventory to a diseased Xoxemon, setting its `disease` field to `null`. Each vaccine type only cures a specific disease — using the wrong vaccine returns an error without consuming the item. The universal vaccine (Inxulina) cures any disease.
+
+**`POST /api/xuxemons/{pivot_id}/vaccinate`** — Requires `Authorization: Bearer <token>`.
+
+Use the `pivot.id` value from `GET /api/xuxedex` as `{pivot_id}`.
+
+## Vaccine compatibility
+
+| Vaccine item | Cures disease |
+|---|---|
+| `Xal de fruites` | `Atracón` |
+| `Xocolatina` | `Bajón de azúcar` |
+| `Inxulina` | Any disease (universal) |
+
+## Request body
+
+<ParamField body="item_id" type="integer" required>
+  The ID of the vaccine item to use. Must be of type `vacuna` and present in your inventory with quantity ≥ 1.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Confirmation string on success.
+</ResponseField>
+
+## Example
+
+```bash
+curl -X POST http://localhost:8000/api/xuxemons/12/vaccinate \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..." \
+  -H "Content-Type: application/json" \
+  -d '{"item_id": 4}'
+```
+
+```json
+{
+  "message": "El teu Xuxemon s'ha curat correctament i torna a estar actiu!"
+}
+```
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Xoxemon is already healthy — no disease to cure. |
+| `400` | Wrong vaccine for the active disease. |
+| `400` | Vaccine not in inventory or quantity is 0. |
+| `404` | `pivot_id` not found in your collection. |
+
+<Tip>
+  Use `Inxulina` when you are unsure which disease a Xoxemon has, or when you want to cure it in a single step regardless of disease type.
+</Tip>

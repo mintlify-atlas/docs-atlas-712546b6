@@ -1,0 +1,67 @@
+---
+title: "Xoxemons: Collect, grow, and battle creatures"
+description: "Xoxemons is a full-stack creature-collecting web game. Grow your Xoxemons, challenge friends to PVP battles, and build your collection."
+---
+
+Welcome to **Xoxemons** — a modern web game where you collect and raise digital creatures called Xoxemons, battle friends in high-stakes PVP matches, and manage a 20-slot inventory to keep your creatures fed and healthy.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get the app running locally in minutes with Docker Compose.
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the Angular + Laravel + MySQL tech stack.
+  </Card>
+  <Card title="Game Mechanics" icon="gamepad" href="/mechanics/xoxemons">
+    Learn how Xoxemons grow, get sick, and evolve.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/register">
+    Full REST API documentation for every endpoint.
+  </Card>
+</CardGroup>
+
+## What is Xoxemons?
+
+Xoxemons is a full-stack web application that combines creature-collecting mechanics with PVP risk-reward combat. Every player starts with a small collection and builds it over time by claiming daily rewards, winning battles, and keeping their creatures healthy.
+
+<CardGroup cols={2}>
+  <Card title="Creature Collection" icon="dragon">
+    Collect Xoxemons across three growth stages — Small, Medium, and Large. Feed them to trigger evolution, but watch out for diseases.
+  </Card>
+  <Card title="PVP Battles" icon="swords">
+    Challenge friends to winner-takes-all battles. The loser's Xoxemon transfers permanently to the winner.
+  </Card>
+  <Card title="Inventory Management" icon="backpack">
+    A 20-slot backpack holds your items. Stackable sweets fill slots in groups of 5; vaccines occupy one slot each.
+  </Card>
+  <Card title="Social & Chat" icon="comments">
+    Add friends, send friend requests, and chat directly with your opponent before a battle.
+  </Card>
+</CardGroup>
+
+## Core features
+
+- **Growth stages** — Xoxemons evolve from Small to Medium (3 sweets) and Medium to Large (5 sweets).
+- **Disease system** — Feeding carries RNG risk. A sick Xoxemon needs +2 extra food to evolve and must be cured with a vaccine.
+- **Battle engine** — Combat is decided by a dice roll, creature size bonus, and elemental type matchup (Water beats Earth, Earth beats Air, Air beats Water).
+- **Daily reward** — Log in daily to claim one random Xoxemon and 10 sweets.
+- **Admin dashboard** — Administrators can give items or Xoxemons to any player and tune global disease probabilities.
+
+## Getting started
+
+<Steps>
+  <Step title="Clone and configure">
+    Clone the repository and copy the backend environment file from `.env.example`.
+  </Step>
+  <Step title="Start the containers">
+    Run `docker-compose up -d --build` from the project root. This builds and starts the Angular frontend, Laravel backend, and MySQL database.
+  </Step>
+  <Step title="Seed the database">
+    Enter the backend container and run `php artisan migrate:fresh --seed` to create tables and load the default Xoxemons, items, and admin user.
+  </Step>
+  <Step title="Open the game">
+    Navigate to `http://localhost:4200` to register your account and claim your first daily reward.
+  </Step>
+</Steps>
+
+See the [full quickstart guide](/quickstart) for detailed commands and troubleshooting tips.

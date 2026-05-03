@@ -1,0 +1,104 @@
+---
+title: "Friends API — search, requests, and friend list"
+description: "Manage your Xoxemons friend network. Search players by custom_id, send and respond to friend requests, list accepted friends, and remove connections."
+---
+
+The Friends API controls the social layer of Xoxemons. Players must be accepted friends before they can chat or initiate a battle. All friendship endpoints require a valid JWT token. The friendship relationship is bidirectional — either player can appear as the requester or recipient.
+
+All endpoints require `Authorization: Bearer <token>`.
+
+---
+
+## Search for players
+
+**`GET /api/friends/search?q={query}`**
+
+Search for other players by partial or full `custom_id` (e.g. searching `Jan` finds `Jan#1042`). Your own account is excluded from results.
+
+<ParamField query="q" type="string" required>
+  Partial or full custom_id to search for.
+</ParamField>
+
+**Response** — array of matching users:
+
+```json
+[
+  { "id": 3, "name": "Jan", "custom_id": "Jan#1042" }
+]
+```
+
+---
+
+## Send a friend request
+
+**`POST /api/friends/request`**
+
+<ParamField body="friend_id" type="integer" required>
+  The database `id` of the player to invite. Must exist in the `users` table.
+</ParamField>
+
+Returns `200 OK` with a confirmation message. Returns `400` if a request or friendship already exists between the two players.
+
+---
+
+## List pending requests
+
+**`GET /api/friends/requests`**
+
+Returns all incoming friend requests (requests sent to you) with status `pending`.
+
+```json
+[
+  {
+    "friendship_id": 7,
+    "user_id": 3,
+    "name": "Jan",
+    "custom_id": "Jan#1042"
+  }
+]
+```
+
+---
+
+## Accept a request
+
+**`POST /api/friends/accept/{id}`**
+
+Accepts the pending request with the given `friendship_id`. Only the recipient (the player the request was sent to) can accept it.
+
+Returns `200 OK`. Returns `404` if not found or if you are not the recipient.
+
+---
+
+## Reject a request
+
+**`DELETE /api/friends/reject/{id}`**
+
+Permanently deletes a pending request. Allows the same player to re-send a request later if needed.
+
+---
+
+## List accepted friends
+
+**`GET /api/friends`**
+
+Returns all accepted friends. The response normalises the bidirectional relationship — regardless of who sent the original request, both players appear in each other's list.
+
+```json
+[
+  {
+    "friendship_id": 7,
+    "user_id": 3,
+    "name": "Jan",
+    "custom_id": "Jan#1042"
+  }
+]
+```
+
+---
+
+## Remove a friend
+
+**`DELETE /api/friends/{id}`**
+
+Deletes the friendship row identified by `friendship_id`. Either player in the friendship can remove it. This also prevents future battles and chat with that player until a new friendship is established.

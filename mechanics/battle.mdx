@@ -1,0 +1,135 @@
+---
+title: "PVP battles: risk everything to win big"
+description: "In Xoxemons PVP, the winner steals the loser's creature permanently. Understand the battle calculation engine and how to tip the odds in your favor."
+---
+
+PVP combat in Xoxemons is built around a single ruthless rule: the winner permanently takes the loser's chosen Xoxemon. There is no duel currency, no entry fee, and no way to undo the result once the battle resolves. Every fight is a high-stakes gamble that rewards preparation and punishes overconfidence.
+
+<Warning>
+  Battles are irreversible. The moment a winner is determined, ownership transfers immediately in the database. You cannot appeal or reverse a loss.
+</Warning>
+
+## Starting a battle
+
+You can only battle players on your friend list. Navigate to a friend's profile or the friends list and open the battle screen for that player. The URL takes the form `/battle/:friendId`.
+
+<Steps>
+  <Step title="Load battle data">
+    The frontend calls `GET /api/battle/{friendId}`. The backend returns two Xoxemon lists — one for you and one for your opponent — filtered to only include **healthy** creatures. A Xoxemon with any active disease cannot fight.
+  </Step>
+  <Step title="Select your fighter">
+    Choose one of your healthy Xoxemons. The game automatically picks a random Xoxemon from your opponent's healthy roster to simulate asynchronous PVP (no simultaneous connection required).
+  </Step>
+  <Step title="Start the battle">
+    Confirm the selection. A 3-second animation plays to build suspense before the result is revealed.
+  </Step>
+  <Step title="Resolve the outcome">
+    The calculation engine runs and the result is displayed. If there is a winner, the transfer API call fires immediately.
+  </Step>
+</Steps>
+
+## Battle calculation
+
+The winner is determined by comparing each player's total score, which is the sum of three factors:
+
+### 1. Base RNG — dice roll
+
+Each side rolls a virtual die: a random integer from **1 to 6**.
+
+```typescript
+const myRoll     = Math.floor(Math.random() * 6) + 1;
+const friendRoll = Math.floor(Math.random() * 6) + 1;
+```
+
+### 2. Size bonus
+
+A Xoxemon's growth stage adds a flat modifier to its roll:
+
+| Size | Modifier |
+|---|---|
+| Small (Petit) | +0 |
+| Medium (Mitja) | +1 |
+| Large (Gran) | +2 |
+
+```typescript
+getSizeMod(size: string): number {
+  if (size === 'Mitja') return 1;
+  if (size === 'Gran')  return 2;
+  return 0;
+}
+```
+
+### 3. Elemental matchup
+
+The three elemental types form a triangle. A favourable matchup adds **+1**; an unfavourable matchup adds **-1**; the same type is neutral (**0**).
+
+| Attacker | Defender | Modifier |
+|---|---|---|
+| Aigua (Water) | Terra (Earth) | +1 |
+| Terra (Earth) | Aire (Air) | +1 |
+| Aire (Air) | Aigua (Water) | +1 |
+| Aigua (Water) | Aire (Air) | -1 |
+| Terra (Earth) | Aigua (Water) | -1 |
+| Aire (Air) | Terra (Earth) | -1 |
+| Any | Same type | 0 |
+
+```typescript
+getTypeMod(myType: string, enemyType: string): number {
+  if (myType === 'Aigua' && enemyType === 'Terra') return  1;
+  if (myType === 'Terra' && enemyType === 'Aire')  return  1;
+  if (myType === 'Aire'  && enemyType === 'Aigua') return  1;
+  if (myType === 'Aigua' && enemyType === 'Aire')  return -1;
+  if (myType === 'Terra' && enemyType === 'Aigua') return -1;
+  if (myType === 'Aire'  && enemyType === 'Terra') return -1;
+  return 0;
+}
+```
+
+### Final score
+
+```
+total = dice_roll + size_modifier + type_modifier
+```
+
+The player with the higher total wins. In the event of an exact tie, no Xoxemon changes hands.
+
+## Xoxemon transfer
+
+When a winner is determined, the frontend sends a single request to execute the ownership change:
+
+```http
+POST /api/battle/transfer
+Content-Type: application/json
+
+{
+  "winner_id": 42,
+  "loser_xuxemon_pivot_id": 17
+}
+```
+
+The backend updates the `user_id` column on the matching `user_xuxemons` row. The Xoxemon — including its current `food_eaten` counter and any active disease — transfers exactly as-is to the winner.
+
+```php
+// BattleController.php — transferXuxemon()
+$xuxemonTransfer->user_id = $request->winner_id;
+$xuxemonTransfer->save();
+```
+
+The backend validates that the authenticated user is either the winner or the owner of the Xoxemon being transferred, preventing third-party theft via direct API calls.
+
+## Strategy tips
+
+<CardGroup cols={2}>
+  <Card title="Size is the most reliable advantage" icon="chart-bar">
+    A Large Xoxemon starts every fight with +2 before dice are rolled. The maximum dice swing is 5 (rolling 6 vs 1), so a Large vs Small matchup is strongly favoured even with a bad roll.
+  </Card>
+  <Card title="Pick favourable type matchups" icon="triangle">
+    A +1/-1 type swing is worth as much as a full size tier difference. If you know your opponent tends to use Terra-type Xoxemons, leading with Agua gives you a reliable edge.
+  </Card>
+  <Card title="Keep your best fighters healthy" icon="heart">
+    Diseased Xoxemons are excluded from the battle roster entirely. Cure diseases before entering the battle screen so you have your full roster available.
+  </Card>
+  <Card title="Never risk your most evolved creature" icon="shield">
+    If you lose, the opponent takes the specific Xoxemon you selected. Send a lower-tier fighter if you are unsure of the match, not your rarest Large.
+  </Card>
+</CardGroup>

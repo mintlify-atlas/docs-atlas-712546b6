@@ -1,0 +1,54 @@
+---
+title: "GET /api/xuxedex — List your Xoxemon collection"
+description: "Returns every Xoxemon the authenticated player owns, with live pivot data — size, food eaten, disease, and the pivot ID used in feed and vaccinate calls."
+---
+
+The `/xuxedex` endpoint returns the authenticated player's full Xoxemon collection. Each item includes both the base Xoxemon data (name, type, image) and the live instance state from the `user_xuxemons` pivot table (size, food eaten, disease). The `pivot.id` field is the identifier you pass to `/feed` and `/vaccinate`.
+
+**`GET /api/xuxedex`** — Requires `Authorization: Bearer <token>`.
+
+## Response
+
+Returns a JSON array of Xoxemon objects.
+
+<ResponseField name="id" type="integer">Base Xoxemon catalogue ID.</ResponseField>
+<ResponseField name="name" type="string">Creature name, e.g. `"Aquariu"`.</ResponseField>
+<ResponseField name="type" type="string">Elemental type: `Aigua` (Water), `Terra` (Earth), or `Aire` (Air).</ResponseField>
+<ResponseField name="size" type="string">Current size from the catalogue: `Petit`, `Mitja`, or `Gran`.</ResponseField>
+<ResponseField name="image" type="string">Image filename or URL.</ResponseField>
+<ResponseField name="pivot" type="object">
+  Live instance state for this player's copy of the Xoxemon.
+  <Expandable title="pivot fields">
+    <ResponseField name="id" type="integer">Pivot row ID — use this as `pivot_id` in `/feed` and `/vaccinate`.</ResponseField>
+    <ResponseField name="food_eaten" type="integer">Sweets consumed since last evolution.</ResponseField>
+    <ResponseField name="disease" type="string|null">Active disease (`Atracón`, `Sobredosis de sucre`, `Bajón de azúcar`), or `null` if healthy.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example
+
+```bash
+curl http://localhost:8000/api/xuxedex \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..."
+```
+
+```json
+[
+  {
+    "id": 3,
+    "name": "Aquariu",
+    "type": "Aigua",
+    "size": "Petit",
+    "image": "aquariu.png",
+    "pivot": {
+      "id": 12,
+      "food_eaten": 1,
+      "disease": null
+    }
+  }
+]
+```
+
+<Note>
+  A Xoxemon with `disease` set to `"Atracón"` cannot be fed until vaccinated. Only healthy Xoxemons (disease is `null`) can participate in battles.
+</Note>

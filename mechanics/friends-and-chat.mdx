@@ -1,0 +1,136 @@
+---
+title: "Friends, friend requests, and in-game chat"
+description: "Add friends by searching their unique custom ID, accept or reject requests, and chat in real time using Xoxemons' short-polling message system."
+---
+
+The social layer of Xoxemons connects players through a friend system that gates both PVP battles and direct messaging. Before you can challenge or chat with another player, you need an accepted friendship — which starts by finding them with their unique identifier.
+
+## The custom ID system
+
+Every account is assigned a `custom_id` at registration. The format is `Name#XXXX`, for example `Marc#1234`. This ID is unique across all players and is the primary way to find someone you want to add.
+
+Your `custom_id` is visible on your profile and is the value other players search for. Unlike a display name, it cannot collide with another player's entry.
+
+## Finding and adding friends
+
+Search for players using their name or custom ID:
+
+```http
+GET /api/friends/search?q=Marc
+```
+
+The backend performs a `LIKE` query on `custom_id`, so partial searches work — searching `Mar` returns `Marc#1234`, `Maria#5678`, and so on. Your own account is excluded from results.
+
+## Friend request flow
+
+<Steps>
+  <Step title="Send a request">
+    Once you find the player, send a friend request:
+
+    ```http
+    POST /api/friends/request
+    Content-Type: application/json
+
+    { "friend_id": 99 }
+    ```
+
+    A row is created in the `friendships` table with `status: "pending"`. Duplicate requests in either direction are rejected.
+  </Step>
+  <Step title="Recipient sees the pending request">
+    The recipient polls their pending requests:
+
+    ```http
+    GET /api/friends/requests
+    ```
+
+    The response includes the `friendship_id`, sender name, and sender `custom_id`.
+  </Step>
+  <Step title="Accept or reject">
+    The recipient either accepts:
+
+    ```http
+    POST /api/friends/accept/{friendship_id}
+    ```
+
+    Or rejects (which deletes the row entirely, allowing a future re-request):
+
+    ```http
+    DELETE /api/friends/reject/{friendship_id}
+    ```
+  </Step>
+  <Step title="Friendship is active">
+    Once accepted, both players appear in each other's friend list. Either player can now initiate a battle or open a chat.
+  </Step>
+</Steps>
+
+## Friend list
+
+Retrieve your accepted friends with:
+
+```http
+GET /api/friends
+```
+
+The friendship relationship is bidirectional — a single row in `friendships` covers both players regardless of who sent the original request. The response always returns the **other** player's details, normalised from whichever direction the row was stored.
+
+To remove a friend, either player can call:
+
+```http
+DELETE /api/friends/{friendship_id}
+```
+
+Removing a friend also removes access to battle and chat with that person until a new friendship is accepted.
+
+## Chat system
+
+Once you are friends with a player, you can open a direct message conversation from the chat view at `/chat/:friendId`.
+
+### Sending and receiving messages
+
+```http
+# Fetch message history
+GET /api/chat/{friendId}
+
+# Send a new message
+POST /api/chat/{friendId}
+Content-Type: application/json
+
+{ "content": "Ready for a battle?" }
+```
+
+Messages are stored in the `messages` table with `sender_id`, `receiver_id`, `content`, and `created_at`. The backend validates that the two users are friends before reading or writing any message — a 403 is returned otherwise.
+
+### Short polling
+
+The frontend keeps the conversation live by polling every 2000 ms using `setInterval`:
+
+```typescript
+// chat.ts — short polling setup
+this.pollingInterval = setInterval(() => {
+  this.chatService.loadMessages(this.friendId).subscribe();
+}, 2000);
+```
+
+When you leave the chat view, `ngOnDestroy` calls `clearInterval` to stop the polling loop and prevent memory leaks.
+
+<Note>
+  Chat uses short polling, not WebSockets. New messages appear within approximately 2 seconds of being sent. High traffic environments would benefit from a WebSocket upgrade (see the project roadmap), but for typical usage the delay is imperceptible.
+</Note>
+
+### Message display
+
+Messages are rendered chronologically (oldest first). The frontend uses a `timeAgo` helper to convert ISO timestamps into human-readable labels like "5 min ago" or "2 h ago", falling back to a locale date string for messages older than 24 hours.
+
+## API reference summary
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/friends/search?q=...` | Search players by name or custom ID |
+| `POST` | `/api/friends/request` | Send a friend request |
+| `GET` | `/api/friends/requests` | List pending incoming requests |
+| `POST` | `/api/friends/accept/{id}` | Accept a pending request |
+| `DELETE` | `/api/friends/reject/{id}` | Reject or cancel a request |
+| `GET` | `/api/friends` | List all accepted friends |
+| `DELETE` | `/api/friends/{id}` | Remove a friend |
+| `GET` | `/api/chat/{friendId}` | Fetch full message history |
+| `POST` | `/api/chat/{friendId}` | Send a message |

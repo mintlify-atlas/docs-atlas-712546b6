@@ -1,0 +1,101 @@
+---
+title: "Managing your 20-slot inventory"
+description: "Xoxemons gives every player a 20-slot backpack. Learn how stackable sweets and single-use vaccines fill slots and why inventory space matters."
+---
+
+Your inventory in Xoxemons is not a simple list — it works like a classic video-game backpack with a hard capacity limit and item-stacking rules. Every decision about what to carry has a real cost, and running out of space at the wrong moment can stall your Xoxemons' growth or leave you unable to cure a disease before a battle.
+
+## The 20-slot backpack
+
+Every player has exactly **20 inventory slots**, fixed at account creation. Slots never expand. The frontend always renders all 20 positions — empty slots display as blank spaces in the grid, which keeps the visual layout stable regardless of how full your bag is.
+
+```typescript
+// inventory.ts — fixed slot array
+slots: any[] = new Array(20).fill(null);
+```
+
+## Item types
+
+There are two categories of item:
+
+<CardGroup cols={2}>
+  <Card title="Sweets (Xuxes)" icon="candy">
+    Stackable food items (`is_stackable = true`). Used to feed your Xoxemons and trigger evolution. Six flavours exist: Maduixa, Llimona, Taronja, Raïm, Sandía, and Colà. All flavours are mechanically identical.
+  </Card>
+  <Card title="Vaccines" icon="syringe">
+    Non-stackable medical items (`is_stackable = false`). Each unit occupies one full slot. Three types: Vacuna Antiglotona, Vacuna Antisucre, and Vacuna Energitzant. A universal Inxulina also exists.
+  </Card>
+</CardGroup>
+
+## Stacking algorithm
+
+Stackable items are divided into blocks of up to **5 per slot**. Non-stackable items always occupy **1 slot per unit**. The frontend calculates the visual layout each time the inventory state changes:
+
+```typescript
+// inventory.ts — calculateSlots()
+calculateSlots(items: any[]) {
+  this.slots = new Array(20).fill(null);
+  let currentSlot = 0;
+
+  for (let item of items) {
+    let qty = item.pivot.quantity;
+
+    if (item.is_stackable) {
+      while (qty > 0 && currentSlot < 20) {
+        let chunk = qty > 5 ? 5 : qty;
+        this.slots[currentSlot] = { ...item, displayQuantity: chunk };
+        qty -= chunk;
+        currentSlot++;
+      }
+    } else {
+      while (qty > 0 && currentSlot < 20) {
+        this.slots[currentSlot] = { ...item, displayQuantity: 1 };
+        qty--;
+        currentSlot++;
+      }
+    }
+  }
+}
+```
+
+### Stacking example
+
+| Scenario | Slots used | Breakdown |
+|---|---|---|
+| 12 sweets of one flavour | 3 slots | 5 + 5 + 2 |
+| 5 sweets of one flavour | 1 slot | 5 |
+| 3 vaccines | 3 slots | 1 + 1 + 1 |
+| 10 sweets + 2 vaccines | 4 slots | 5 + 5 (sweets) + 1 + 1 (vaccines) |
+
+Each slot renders a quantity badge showing its `displayQuantity`. Empty slots appear as blank grid cells.
+
+## Why inventory space matters
+
+The 20-slot cap creates meaningful trade-offs:
+
+- **Hoarding sweets** fills slots fast. Twelve sweets of the same flavour takes 3 slots; stocking all six flavours for variety eats even more space.
+- **Keeping vaccines** is expensive. One vaccine per slot means carrying a full cure kit for all three diseases costs 3–4 slots depending on whether you include Inxulina.
+- **Running out of space** means you cannot receive gifts from admins or claim your daily reward if the reward items have nowhere to go.
+
+<Tip>
+  Before a battle session, consider clearing low-quantity sweet stacks to free up slots for the vaccines you might need after a post-battle disease scare.
+</Tip>
+
+## How to get items
+
+<AccordionGroup>
+  <Accordion title="Daily reward">
+    Claim once per day from the main hub. Awards 10 sweets (distributed to an existing stack or new slots).
+  </Accordion>
+  <Accordion title="Admin gifts">
+    Players with the `robot` role can send items directly to any account via `POST /api/admin/give-item`. The item and quantity are added to the recipient's `user_items` pivot row (creating the row if it does not exist).
+  </Accordion>
+</AccordionGroup>
+
+## Inventory API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/inventory` | Returns all items with `pivot.quantity` |
+| `POST` | `/api/xuxemons/{pivot_id}/feed` | Consumes 1 sweet from inventory |
+| `POST` | `/api/xuxemons/{pivot_id}/vaccinate` | Consumes 1 vaccine from inventory |

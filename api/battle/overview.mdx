@@ -1,0 +1,87 @@
+---
+title: "Battle API — PVP data and Xoxemon transfer"
+description: "Fetch healthy Xoxemons for both players before a battle, then execute the ownership transfer that moves the loser's Xoxemon to the winner permanently."
+---
+
+The Battle API has two endpoints: one to load the eligible Xoxemons for both sides of a fight, and one to execute the ownership transfer once the Angular frontend has calculated the winner. Only healthy Xoxemons (no active disease) are eligible for combat. The transfer is permanent — the loser's chosen Xoxemon moves to the winner's collection immediately.
+
+All endpoints require `Authorization: Bearer <token>`.
+
+---
+
+## Get battle data
+
+**`GET /api/battle/{friendId}`**
+
+Returns the healthy Xoxemons available to both players for selection. A Xoxemon with an active disease is excluded.
+
+<ParamField path="friendId" type="integer" required>
+  The database `id` of the friend you want to battle.
+</ParamField>
+
+**Response:**
+
+<ResponseField name="me" type="array">
+  Your healthy Xoxemons, each with `pivot_id`, `name`, `type`, `size`, and `image`.
+</ResponseField>
+<ResponseField name="friend" type="array">
+  Your friend's healthy Xoxemons, same structure.
+</ResponseField>
+
+```json
+{
+  "me": [
+    { "pivot_id": 12, "name": "Aquariu", "type": "Aigua", "size": "Mitja", "image": "aquariu.png" }
+  ],
+  "friend": [
+    { "pivot_id": 7, "name": "Terrus", "type": "Terra", "size": "Petit", "image": "terrus.png" }
+  ]
+}
+```
+
+---
+
+## Transfer Xoxemon to winner
+
+**`POST /api/battle/transfer`**
+
+Executes the post-battle ownership transfer. The Angular frontend calculates the winner client-side using the battle formula (dice + size bonus + elemental matchup), then calls this endpoint to record the result.
+
+<ParamField body="winner_id" type="integer" required>
+  The database `id` of the winning player.
+</ParamField>
+
+<ParamField body="loser_xuxemon_pivot_id" type="integer" required>
+  The `pivot_id` of the Xoxemon being transferred (the loser's chosen creature).
+</ParamField>
+
+**Response:**
+
+```json
+{ "message": "El Xuxemon ha estat robat amb èxit!" }
+```
+
+## Battle calculation (client-side)
+
+The Angular frontend computes the outcome before calling `/transfer`:
+
+| Factor | Value |
+|--------|-------|
+| Dice roll | Random 1–6 |
+| Size bonus | +1 if Medium (`Mitja`), +2 if Large (`Gran`) |
+| Elemental advantage | +1 if attacker's type beats defender's type |
+| Elemental disadvantage | −1 if attacker's type loses to defender's type |
+
+**Type chart:** Water (`Aigua`) beats Earth (`Terra`), Earth beats Air (`Aire`), Air beats Water.
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `403` | Authenticated user is not the winner or the loser — transfer rejected. |
+| `404` | `loser_xuxemon_pivot_id` not found. |
+| `422` | Validation failed — missing required fields. |
+
+<Warning>
+  The Xoxemon transfer is irreversible. The creature moves to the winner's collection with its current `food_eaten` and `disease` state intact.
+</Warning>

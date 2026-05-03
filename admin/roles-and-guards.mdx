@@ -1,0 +1,118 @@
+---
+title: "Authentication, roles, and route guards"
+description: "Xoxemons uses JWT bearer tokens for auth, and enforces access control with dual-layer guards on the Angular frontend and Laravel backend middleware."
+---
+
+Every protected action in Xoxemons — from viewing your inventory to accessing the admin dashboard — is secured through a layered system of JSON Web Tokens (JWT), Angular route guards, and Laravel backend middleware. The design means that even if a player manipulates their browser's local storage, the server independently verifies identity and role before executing any sensitive operation.
+
+## User roles
+
+There are two roles in the system, stored in the `role` column of the `users` table:
+
+| Role | Value | Description |
+|------|-------|-------------|
+| Regular player | `player` | Can play the game: collect Xoxemons, use inventory, battle friends, chat |
+| Administrator | `robot` | All player capabilities plus full access to the admin dashboard |
+
+<Note>
+  The first account registered in a fresh database is automatically assigned `role='robot'`. Every subsequent registration receives `role='player'`. This means re-seeding the database with `php artisan migrate:fresh --seed` always recreates a predictable admin account (`Admin#0000`).
+</Note>
+
+## JWT authentication flow
+
+Xoxemons uses the `tymon/jwt-auth` library on the Laravel backend. Tokens are stateless bearer tokens — the server does not store session data.
+
+<Steps>
+  <Step title="Register or log in">
+    Send a `POST /api/register` or `POST /api/login` request with your credentials. A successful login returns an `access_token` (the JWT), its `token_type` (`bearer`), `expires_in` (in seconds), and your user object.
+
+    ```json
+    {
+      "access_token": "eyJ0eXAiOiJKV1Qi...",
+      "token_type": "bearer",
+      "expires_in": 3600,
+      "user": { "id": 1, "custom_id": "Admin#0000", "role": "robot" }
+    }
+    ```
+  </Step>
+  <Step title="Token stored in localStorage">
+    The Angular `AuthService` writes the token and a client-side expiry timestamp to `localStorage`. This persists the session across page refreshes without a server round-trip.
+  </Step>
+  <Step title="Automatic Authorization header injection">
+    The `authInterceptor` runs before every outgoing HTTP request. If a token is present and not yet expired, it clones the request and attaches the header:
+
+    ```http
+    Authorization: Bearer <token>
+    ```
+
+    This happens transparently — no service or component needs to add the header manually.
+  </Step>
+  <Step title="Proactive and reactive token expiry">
+    The interceptor performs two expiry checks:
+
+    - **Proactive:** Before sending the request, it compares the stored timestamp against a 2-hour client-side window. If expired, the token is removed and the user is redirected to `/login` without a wasted network call.
+    - **Reactive:** If the server returns a `401 Unauthorized` (e.g. the token was invalidated server-side via logout), the interceptor catches the error, clears the token from storage, and redirects to `/login`.
+  </Step>
+</Steps>
+
+## Frontend route guards
+
+Angular route guards run before a component is loaded. Xoxemons uses two guards, applied in sequence on protected routes.
+
+### `authGuard` — presence check
+
+`authGuard` is registered on every private route (inventory, battle, friends, chat, profile, etc.). It reads the token from `localStorage` synchronously — no network call is made. If a token is found (even an expired one), the user is allowed through; the interceptor handles expiry when the first API call fires. If no token exists, the user is redirected to `/login`.
+
+```
+User navigates to /inventory
+  └── authGuard: token in localStorage? → yes → load component
+                                         → no  → redirect to /login
+```
+
+### `adminGuard` — role verification
+
+`adminGuard` is layered **after** `authGuard` exclusively on the `/admin` route (`canActivate: [authGuard, adminGuard]`). Unlike `authGuard`, it makes a real API call to `GET /api/me` to fetch the user's role directly from the database.
+
+```
+User navigates to /admin
+  └── authGuard: token present? → yes
+        └── adminGuard: GET /api/me → role === 'robot'? → yes → load admin dashboard
+                                                         → no  → redirect to /main
+                                     → API error?        → redirect to /login
+```
+
+This two-step approach closes a critical attack surface: a malicious user who edits their `localStorage` to fake a `role='robot'` value would still be blocked because `adminGuard` validates the role against the live database record, not any client-side data.
+
+<Warning>
+  Frontend guards are a usability layer, not the final security boundary. They prevent accidental navigation and protect the UI, but a determined attacker with a valid JWT could still call backend endpoints directly. The authoritative access control is the backend — see the section below.
+</Warning>
+
+## Backend protection
+
+All routes inside the `auth:api` middleware group in `routes/api.php` require a valid, non-expired JWT. If the token is missing, malformed, or revoked (e.g. the user logged out), Laravel returns `401 Unauthorized` before the controller method is ever called.
+
+Admin endpoints additionally check `role='robot'` inside the controller logic. A player-role token calling `POST /api/admin/give-item` will be rejected even though the route is technically reachable.
+
+```php
+// routes/api.php — all routes inside this group require a valid JWT
+Route::group(['middleware' => 'auth:api'], function () {
+    Route::get('/admin/users',         [AdminController::class, 'getUsers']);
+    Route::post('/admin/give-item',    [AdminController::class, 'giveItem']);
+    Route::post('/admin/give-xoxemon', [AdminController::class, 'giveRandomXuxemon']);
+    Route::get('/admin/settings',      [AdminController::class, 'getSettings']);
+    Route::post('/admin/settings',     [AdminController::class, 'updateSettings']);
+});
+```
+
+## Password security
+
+Passwords are never stored in plain text. Laravel's `Hash::make()` applies **bcrypt** before writing to the database during both registration and profile updates. The login flow uses `JWTAuth::attempt()` which internally calls `Hash::check()` — the raw password is only ever in memory during the authentication request.
+
+<Tip>
+  Always log out when using shared or public devices. Calling `POST /api/logout` adds the current token to the JWT blacklist, making it invalid server-side immediately — even before it would naturally expire. Closing the browser tab alone does **not** revoke the token.
+</Tip>
+
+## Related pages
+
+- [Admin dashboard and player management](/admin/overview) — what the admin dashboard can do
+- [Tuning global game balance with settings](/admin/settings) — the settings table that administrators can modify

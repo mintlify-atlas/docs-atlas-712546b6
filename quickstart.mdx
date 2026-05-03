@@ -1,81 +1,106 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
-icon: 'rocket'
+title: "Get started with Xoxemons"
+description: "Learn how to clone, configure, and launch the full Xoxemons stack locally using Docker Compose. Get a seeded database and browser-ready game in minutes."
 ---
 
-## Get started in three steps
+This guide walks you through setting up the complete Xoxemons application on your local machine — Angular frontend, Laravel backend, and MySQL database — all running in Docker containers. By the end you will have the game accessible in your browser and a seeded database with test accounts ready to use.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, make sure the following tools are installed:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- **Docker** (v20.10 or later)
+- **Docker Compose** (v2 or later — included with Docker Desktop)
+- **Git**
 
-### Step 2: Deploy your changes
+## Setup
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Xoxemons repository and enter the project root:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash
+    git clone https://github.com/MarcFrancesCharles/XOXEMONS.git
+    cd XOXEMONS
+    ```
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Configure the backend environment">
+    Copy the example environment file for the Laravel backend:
 
-### Step 3: Go live
+    ```bash
+    cp backend/.env.example backend/.env
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    <Note>
+      The default values in `.env.example` already match the database credentials defined in `docker-compose.yml` (`DB_HOST=db`, `DB_DATABASE=backend`, `DB_USERNAME=root`, `DB_PASSWORD=root`). You do not need to change anything for local development.
+    </Note>
+  </Step>
 
-## Next steps
+  <Step title="Build and start the containers">
+    From the project root, build all images and start the services in detached mode:
 
-Now that you have your docs running, explore these key features:
+    ```bash
+    docker-compose up -d --build
+    ```
 
-<CardGroup cols={2}>
+    This command builds the Angular development server and the PHP/Apache backend image, then starts four containers: `db`, `adminer`, `backend`, and `frontend`. The first build may take a few minutes.
+  </Step>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+  <Step title="Run migrations and seed the database">
+    Enter the backend container and initialise the database:
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    ```bash
+    docker-compose exec backend bash
+    ```
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+    Inside the container, run the following commands one at a time:
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+    ```bash
+    composer install
+    php artisan key:generate
+    php artisan migrate:fresh --seed
+    ```
 
-</CardGroup>
+    Type `exit` when done to leave the container shell.
+
+    The seeder creates the admin account, five test players, the full Xoxemon catalogue, all items, and the default game settings.
+  </Step>
+
+  <Step title="Open the application">
+    The application is now running. Open these URLs in your browser:
+
+    | Service | URL | Description |
+    |---------|-----|-------------|
+    | Frontend | `http://localhost:4200` | Angular game client |
+    | Backend API | `http://localhost:8000/api` | Laravel REST API |
+    | Adminer | `http://localhost:8080` | Database management UI |
+  </Step>
+</Steps>
+
+## Default seeded accounts
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  The seeder creates an administrator and five test players. All accounts share the same password.
+
+  | Role | Custom ID | Email | Password |
+  |------|-----------|-------|----------|
+  | Admin | `Admin#0000` | `admin@xoxemons.com` | `admin` |
+  | Player | `Jan#1001` | `jan@xoxemons.com` | `admin` |
+  | Player | `Maria#1002` | `maria@xoxemons.com` | `admin` |
+  | Player | `Pau#1003` | `pau@xoxemons.com` | `admin` |
+  | Player | `Laia#1004` | `laia@xoxemons.com` | `admin` |
+  | Player | `Arnau#1005` | `arnau@xoxemons.com` | `admin` |
+
+  Log in with your **Custom ID** (not your email address) on the login screen. The admin account has the `robot` role and can access the admin dashboard.
 </Note>
+
+## Troubleshooting
+
+<Tip>
+  If `docker-compose up` fails with a port conflict, another process is already using port `3306`, `4200`, `8000`, or `8080`. Stop the conflicting service or change the host-side port mapping in `docker-compose.yml` (the number on the left of the colon).
+
+  If the frontend shows a blank screen or network errors after the containers start, wait 30–60 seconds for the Angular dev server to finish compiling, then refresh the page.
+
+  If `php artisan migrate:fresh --seed` returns a database connection error, the MySQL container may still be starting. Run `docker-compose ps` to confirm the `db` container is healthy, then retry.
+</Tip>

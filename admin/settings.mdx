@@ -1,0 +1,102 @@
+---
+title: "Tuning global game balance with settings"
+description: "Administrators can adjust the three disease probability values — atracon, sobredosis, and bajon — to control how risky it is to feed a Xoxemon."
+---
+
+The `settings` table is the game's balance control panel. It stores three integer probability values that the backend consults every time a player feeds a Xoxemon. By raising or lowering these numbers, an administrator can make the game a tense challenge or a relaxed experience — without redeploying code or touching migrations.
+
+## The three probability fields
+
+Each field holds an integer from **0** (disease never triggers) to **100** (disease triggers on every feed). The three probabilities are checked in order during a single feed action using cumulative if/else logic — at most one disease can be contracted per feed.
+
+<CardGroup cols={1}>
+  <Card title="atracon_prob — Atracón" icon="circle-exclamation">
+    **Type:** `integer` (0–100) — **Default:** `10`
+
+    Probability that a Xoxemon overeats and contracts the *Atracón* disease. An afflicted Xoxemon cannot be fed again until cured with a vaccine. This is the most disruptive disease because it completely blocks progression until the player spends an inventory slot on a vaccine.
+  </Card>
+  <Card title="sobredosis_prob — Sobredosis" icon="triangle-exclamation">
+    **Type:** `integer` (0–100) — **Default:** `5`
+
+    Probability that a Xoxemon overdoses on sweets and contracts *Sobredosis*. Like Atracón, this disease requires a vaccine to cure before feeding can resume.
+  </Card>
+  <Card title="bajon_prob — Bajón de azúcar" icon="arrow-trend-down">
+    **Type:** `integer` (0–100) — **Default:** `5`
+
+    Probability that a Xoxemon gets a sugar crash and contracts *Bajón de azúcar*. In addition to needing a vaccine, this disease applies a **+2 modifier to the evolution threshold** — the Xoxemon needs two extra sweets beyond the normal requirement to evolve to the next size. This makes it the most strategically costly disease.
+  </Card>
+</CardGroup>
+
+## Default values
+
+The `SettingSeeder` initialises the table with balanced values designed for a fair first experience. The total disease probability on any given feed is 20%, leaving an 80% chance of no illness:
+
+| Key | Default value | Disease |
+|-----|:---:|---------|
+| `atracon_prob` | `10` | Atracón |
+| `sobredosis_prob` | `5` | Sobredosis |
+| `bajon_prob` | `5` | Bajón de azúcar |
+
+The seeder uses `updateOrCreate`, so running `php artisan migrate:fresh --seed` resets only rows that haven't been modified — it will not overwrite values an administrator already changed.
+
+## How to update settings
+
+### Via the admin dashboard
+
+<Steps>
+  <Step title="Open the settings panel">
+    Log in as an admin account and navigate to `/admin`. The settings form is pre-populated with the current values fetched from `GET /api/admin/settings`.
+  </Step>
+  <Step title="Adjust the values">
+    Enter new integer values between 0 and 100 for each probability field.
+  </Step>
+  <Step title="Save">
+    Submit the form. The dashboard sends a `POST /api/admin/settings` request with all three values. A success message confirms the update.
+  </Step>
+</Steps>
+
+### Via the API directly
+
+Send a `POST` request to `/api/admin/settings` with a valid admin JWT. All three fields are required and must be integers between 0 and 100.
+
+```http
+POST /api/admin/settings
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "atracon_prob": 15,
+  "sobredosis_prob": 8,
+  "bajon_prob": 3
+}
+```
+
+A successful response returns:
+
+```json
+{
+  "message": "⚙️ Configuració global del joc actualitzada amb èxit!"
+}
+```
+
+If any value fails validation (missing, non-integer, or out of the 0–100 range), the backend returns a `422 Unprocessable Entity` with field-level error details and no partial update is applied.
+
+## Effect on gameplay
+
+| Probability range | Gameplay feel |
+|---|---|
+| 0–5% per disease | Very casual — diseases are rare events; players rarely need vaccines |
+| 5–15% per disease | Balanced — diseases occur often enough to matter but not frustrate |
+| 15–30% per disease | Challenging — inventory management becomes critical; vaccine supply matters |
+| 30%+ per disease | Hardcore — Xoxemons frequently get sick; evolution is slow and resource-intensive |
+
+Because all three probabilities are checked on every feed action, stacking all three values high (e.g. 30 + 30 + 30) creates a cumulative risk where the expected number of diseases per 10 feeds is very high.
+
+<Note>
+  Changes to the settings table take effect **immediately** for all subsequent feed actions. There is no cache layer between the `XuxemonController` and the `settings` table — the backend reads the current values on every request.
+</Note>
+
+## Related pages
+
+- [Admin dashboard and player management](/admin/overview) — full overview of the admin panel
+- [Authentication, roles, and route guards](/admin/roles-and-guards) — how admin API access is secured

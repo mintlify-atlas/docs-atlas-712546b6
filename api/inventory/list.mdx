@@ -1,0 +1,61 @@
+---
+title: "GET /api/inventory — Retrieve your item backpack"
+description: "Returns all items in the authenticated player's 20-slot inventory, including item type, stackability, and current quantity from the user_items pivot table."
+---
+
+The inventory endpoint returns every item the authenticated player currently owns. Items are returned with their base attributes (name, type, `is_stackable`) plus the `pivot.quantity` that reflects the actual count in the player's backpack. This data drives the 20-slot visual backpack in the game UI.
+
+**`GET /api/inventory`** — Requires `Authorization: Bearer <token>`.
+
+## Response
+
+Returns a JSON array of item objects.
+
+<ResponseField name="id" type="integer">Item catalogue ID.</ResponseField>
+<ResponseField name="name" type="string">Item name, e.g. `"Xuxe de maduixa"` or `"Inxulina"`.</ResponseField>
+<ResponseField name="type" type="string">`xuxe` (sweet/food) or `vacuna` (vaccine).</ResponseField>
+<ResponseField name="is_stackable" type="boolean">
+  `true` for sweets — they stack 5 per visual slot. `false` for vaccines — each unit occupies one slot.
+</ResponseField>
+<ResponseField name="pivot" type="object">
+  <Expandable title="pivot fields">
+    <ResponseField name="quantity" type="integer">Number of this item the player owns.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example
+
+```bash
+curl http://localhost:8000/api/inventory \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..."
+```
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Xuxe de maduixa",
+    "type": "xuxe",
+    "is_stackable": true,
+    "pivot": { "quantity": 12 }
+  },
+  {
+    "id": 4,
+    "name": "Inxulina",
+    "type": "vacuna",
+    "is_stackable": false,
+    "pivot": { "quantity": 2 }
+  }
+]
+```
+
+## Slot calculation
+
+The backpack has a hard limit of **20 visual slots**. Slot usage is calculated as follows:
+
+- **Sweets** (`is_stackable: true`): `ceil(quantity / 5)` slots. For example, 12 sweets = 3 slots (5 + 5 + 2).
+- **Vaccines** (`is_stackable: false`): `quantity` slots (1 per unit).
+
+<Info>
+  When the backpack reaches 20 slots, no more items can be added — admin gifts and future daily rewards will be rejected until space is freed. Use sweets by feeding Xoxemons and vaccines by curing diseases to make room.
+</Info>

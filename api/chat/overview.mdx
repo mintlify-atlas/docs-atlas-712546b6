@@ -1,0 +1,76 @@
+---
+title: "Chat API — send and receive messages with friends"
+description: "Retrieve message history and send new messages to accepted friends. Xoxemons chat uses short polling — the frontend fetches new messages every 2 seconds."
+---
+
+The Chat API lets players exchange messages with accepted friends. Messages are persisted in the `messages` table and retrieved in full on each poll. The Angular frontend polls `GET /api/chat/{friendId}` every 2000 ms using `setInterval` to simulate real-time delivery. Both chat endpoints require a valid JWT token and the target user must be an accepted friend.
+
+All endpoints require `Authorization: Bearer <token>`.
+
+---
+
+## Get message history
+
+**`GET /api/chat/{friendId}`**
+
+Returns all messages exchanged between the authenticated player and the specified friend, ordered by `created_at` ascending.
+
+<ParamField path="friendId" type="integer" required>
+  The database `id` of the friend whose conversation you want to retrieve.
+</ParamField>
+
+**Response** — array of message objects:
+
+<ResponseField name="id" type="integer">Message ID.</ResponseField>
+<ResponseField name="sender_id" type="integer">User ID of the player who sent the message.</ResponseField>
+<ResponseField name="receiver_id" type="integer">User ID of the recipient.</ResponseField>
+<ResponseField name="content" type="string">Message text.</ResponseField>
+<ResponseField name="created_at" type="string">ISO 8601 timestamp.</ResponseField>
+
+```json
+[
+  {
+    "id": 1,
+    "sender_id": 5,
+    "receiver_id": 3,
+    "content": "Ready to battle?",
+    "created_at": "2024-10-01T12:00:00.000000Z"
+  }
+]
+```
+
+---
+
+## Send a message
+
+**`POST /api/chat/{friendId}`**
+
+<ParamField path="friendId" type="integer" required>
+  The database `id` of the friend to message.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  The message text to send.
+</ParamField>
+
+**Response** — the newly created message object (same fields as above).
+
+```bash
+curl -X POST http://localhost:8000/api/chat/3 \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..." \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Ready to battle?"}'
+```
+
+---
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `404` | `friendId` not found or not an accepted friend. |
+| `422` | Missing or empty `content` field. |
+
+<Note>
+  Because chat uses short polling rather than WebSockets, there is an average 1–2 second delay between sending a message and it appearing on the recipient's screen. The polling loop runs only while the chat component is open and is destroyed on navigation to prevent memory leaks.
+</Note>

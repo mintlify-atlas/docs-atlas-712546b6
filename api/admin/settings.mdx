@@ -1,0 +1,69 @@
+---
+title: "Admin: read and update global game settings"
+description: "Read or update the three disease probability values that control how likely a Xoxemon is to fall ill after being fed. Changes take effect immediately."
+---
+
+The settings endpoints let admins read and modify the three global disease probabilities that control the risk level when feeding a Xoxemon. Values are integers from 0 to 100 representing percentages. Changes are persisted immediately and affect all subsequent feed actions across the entire game.
+
+All endpoints require `Authorization: Bearer <token>` with role `robot`.
+
+---
+
+## Get current settings
+
+**`GET /api/admin/settings`**
+
+Returns the current probability values as a key-value object.
+
+```bash
+curl http://localhost:8000/api/admin/settings \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..."
+```
+
+```json
+{
+  "atracon_prob": 10,
+  "sobredosis_prob": 5,
+  "bajon_prob": 5
+}
+```
+
+---
+
+## Update settings
+
+**`POST /api/admin/settings`**
+
+All three fields are required. Values must be integers between 0 and 100.
+
+<ParamField body="atracon_prob" type="integer" required>
+  Probability (0–100) that a Xoxemon contracts `Atracón` when fed. A Xoxemon with Atracón cannot eat until vaccinated with `Xal de fruites` or `Inxulina`.
+</ParamField>
+
+<ParamField body="sobredosis_prob" type="integer" required>
+  Probability (0–100) that a Xoxemon contracts `Sobredosis de sucre`. Cured with `Inxulina`.
+</ParamField>
+
+<ParamField body="bajon_prob" type="integer" required>
+  Probability (0–100) that a Xoxemon contracts `Bajón de azúcar`. This disease increases the evolution food threshold by +2. Cured with `Xocolatina` or `Inxulina`.
+</ParamField>
+
+**Response:**
+
+```json
+{ "message": "Configuració global del joc actualitzada amb èxit!" }
+```
+
+## Default values
+
+| Setting | Default | Effect |
+|---|---|---|
+| `atracon_prob` | 10 | 10% chance of Atracón per feed |
+| `sobredosis_prob` | 5 | 5% chance of Sobredosis per feed |
+| `bajon_prob` | 5 | 5% chance of Bajón (+2 evolution cost) per feed |
+
+The probabilities are applied cumulatively. If `atracon_prob = 10` and `sobredosis_prob = 5`, a roll of 1–10 triggers Atracón and a roll of 11–15 triggers Sobredosis. Rolls above the combined total result in no disease.
+
+<Note>
+  Changes apply to all future feed requests immediately. There is no caching layer — the backend reads from the database on every `/feed` call.
+</Note>

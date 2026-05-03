@@ -1,0 +1,43 @@
+---
+title: "POST /api/logout — Invalidate your session token"
+description: "Revoke the current JWT bearer token server-side. After logout, the token is added to a blacklist and rejected on all authenticated endpoints."
+---
+
+The logout endpoint invalidates the current JWT token by adding it to the server-side blacklist. Any subsequent request using the same token will receive a `401 Unauthorized` response. The Angular frontend also clears the token from `localStorage` after a successful logout call.
+
+**`POST /api/logout`** — Requires `Authorization: Bearer <token>`.
+
+## Request
+
+No request body required.
+
+## Response
+
+Returns `200 OK`.
+
+<ResponseField name="message" type="string">
+  Confirmation string, e.g. `"Sessió tancada correctament"`.
+</ResponseField>
+
+## Example
+
+```bash
+curl -X POST http://localhost:8000/api/logout \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1Qi..."
+```
+
+```json
+{
+  "message": "Sessió tancada correctament"
+}
+```
+
+## Errors
+
+| Status | Meaning |
+|--------|---------|
+| `401` | Token missing, malformed, or already invalidated. |
+
+<Tip>
+  Always call logout when leaving a shared device. This invalidates the token on the server, not just in the browser.
+</Tip>

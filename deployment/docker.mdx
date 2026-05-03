@@ -1,0 +1,98 @@
+---
+title: "Deploy Xoxemons with Docker Compose"
+description: "Run the full Xoxemons stack — Angular frontend, Laravel backend, and MySQL database — using a single docker-compose up command."
+---
+
+Xoxemons ships with a fully containerised setup that eliminates environment drift. Four Docker Compose services — a MySQL 8.0 database, an Adminer GUI, a PHP/Apache backend, and an Angular dev server — are wired together so the only tool you need on your host machine is Docker.
+
+## Prerequisites
+
+- [Docker Engine](https://docs.docker.com/engine/install/) 24+
+- [Docker Compose](https://docs.docker.com/compose/install/) v2 (bundled with Docker Desktop)
+- Git
+
+## Services
+
+The `docker-compose.yml` at the repository root defines four services:
+
+| Service | Image / Build | Host port | Purpose |
+|---|---|---|---|
+| `db` | `mysql:8.0` | `3306` | Persistent MySQL database |
+| `adminer` | `adminer` (official) | `8080` | Web-based database GUI |
+| `backend` | `./backend/Dockerfile` (PHP 8.2 + Apache) | `8000 → 80` | Laravel REST API |
+| `frontend` | `./frontend/Dockerfile` (Node 20 + Angular CLI) | `4200` | Angular dev server |
+
+`backend` depends on `db`, and `frontend` depends on `backend`, so Docker Compose starts services in the correct order automatically.
+
+## Step-by-step deployment
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <REPO_URL> xoxemons
+    cd xoxemons
+    ```
+  </Step>
+
+  <Step title="Copy the backend environment file">
+    The `.env.example` ships with values pre-configured to match the Docker Compose service names.
+
+    ```bash
+    cd backend && cp .env.example .env
+    ```
+
+    See [Backend environment configuration](/deployment/configuration) for a full variable reference.
+  </Step>
+
+  <Step title="Build and start all containers">
+    Run this from the repository root (where `docker-compose.yml` lives):
+
+    ```bash
+    docker-compose up -d --build
+    ```
+
+    The first build takes a few minutes while Docker compiles the PHP extensions, pulls the Node 20 image, and installs the Angular CLI.
+  </Step>
+
+  <Step title="Set up the database">
+    Once the containers are running, enter the backend container and run the Artisan setup commands:
+
+    ```bash
+    docker-compose exec backend bash
+    composer install
+    php artisan key:generate
+    php artisan migrate:fresh --seed
+    exit
+    ```
+
+    `migrate:fresh --seed` creates all tables from scratch and populates them with the default Xoxemons catalogue, items, disease settings, and a seeded admin account.
+  </Step>
+
+  <Step title="Verify the deployment">
+    Open a browser and check each endpoint:
+
+    - **Frontend** — [http://localhost:4200](http://localhost:4200)
+    - **API** — [http://localhost:8000/api](http://localhost:8000/api)
+    - **Adminer** — [http://localhost:8080](http://localhost:8080)
+
+    Log in to Adminer with server `db`, username `root`, password `root`, database `backend` to inspect the schema directly.
+  </Step>
+</Steps>
+
+## Stopping and cleanup
+
+Stop all running containers without removing data:
+
+```bash
+docker-compose down
+```
+
+Stop and **permanently delete** the database volume:
+
+```bash
+docker-compose down -v
+```
+
+<Warning>
+  The `-v` flag removes the named `db_data` volume that persists your MySQL data. All users, Xoxemons, inventory, and game state will be wiped and cannot be recovered. Only use this flag when you want a completely clean environment.
+</Warning>

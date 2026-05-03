@@ -1,0 +1,187 @@
+---
+title: "Database schema and migrations"
+description: "Explore the Xoxemons relational schema: eight tables built with Laravel migrations, including pivot tables that track creature ownership, disease, and inventory."
+---
+
+Xoxemons uses MySQL 8.0 as its persistence layer, managed entirely through Laravel Eloquent migrations. The schema is built around two pivot tables — `user_xuxemons` and `user_items` — that are modelled as first-class Eloquent models rather than anonymous pivots, because each ownership record carries its own game state (size, hunger, disease, quantity).
+
+## Overview
+
+| Property | Value |
+|---|---|
+| Engine | MySQL 8.0 |
+| Total core tables | 8 |
+| Migration tool | Laravel Artisan (`php artisan migrate`) |
+| ORM | Eloquent with Eager Loading (`with()`) |
+
+## Running migrations
+
+Apply all pending migrations against the running database:
+
+```bash
+php artisan migrate
+```
+
+Wipe the database, recreate every table, and populate it with seed data:
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+<Warning>
+  `migrate:fresh` drops **all** tables before recreating them. Every user account, creature, and inventory item will be lost. Use this only in development or when you deliberately want to reset to a clean state.
+</Warning>
+
+## Table reference
+
+### `users`
+
+Stores all player and administrator accounts.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | Auto-increment primary key. |
+| `custom_id` | `string` (unique) | Human-readable login identifier, e.g. `Jan#1001`. Generated at registration. |
+| `name` | `string` | Given name. |
+| `surnames` | `string` | Family name(s). |
+| `email` | `string` (unique) | Used for notifications and identification. |
+| `password` | `string` | Bcrypt hash (12 rounds). |
+| `role` | `string` | `player` (default) or `robot` (administrator). |
+| `last_daily_reward` | `timestamp` (nullable) | Timestamp of the last claimed daily reward. `null` means never claimed. Added in migration `2026_04_09`. |
+| `created_at` / `updated_at` | `timestamp` | Standard Laravel timestamps. |
+
+---
+
+### `xuxemons`
+
+The master catalogue of all creatures in the game. These rows are never modified by players — they define the species, not individual owned instances.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | |
+| `name` | `string` | Species name, e.g. `Gotiró`, `Maregot`. |
+| `type` | `enum` | Element: `Aigua` (Water), `Terra` (Earth), or `Aire` (Air). |
+| `size` | `enum` | Evolution stage: `Petit` (Small), `Mitja` (Medium), or `Gran` (Large). |
+| `image` | `string` (nullable) | Path to the sprite asset, e.g. `/assets/xuxemons/gotiro.png`. |
+| `created_at` / `updated_at` | `timestamp` | |
+
+The seeder populates 18 species: 6 per element, organised into two evolution families of three stages each (e.g. Gotiró → Bassiol → Maregot).
+
+---
+
+### `items`
+
+The master catalogue of consumable items. Like `xuxemons`, these are reference data that admins manage.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | |
+| `name` | `string` | Item name, e.g. `Xuxe de Maduixa`, `Vacuna Antiglotona`. |
+| `type` | `enum` | `xuxe` (food) or `vacuna` (medicine). |
+| `is_stackable` | `boolean` | `true` for xuxes (stack in groups of 5); `false` for vaccines (1 inventory slot per unit). |
+| `image` | `string` (nullable) | Path to the item sprite. |
+| `created_at` / `updated_at` | `timestamp` | |
+
+The seeder inserts 6 xuxe flavours (all stackable) and 3 vaccines (non-stackable): Vacuna Antiglotona, Vacuna Antisucre, and Vacuna Energitzant.
+
+---
+
+### `user_xuxemons`
+
+Pivot table representing each creature instance owned by a player. A single `xuxemons` species row can have many `user_xuxemons` records — one per player who owns a creature of that species.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | Explicit primary key, making this a full Eloquent model rather than a simple pivot. |
+| `user_id` | `bigint` (FK → `users.id`) | Owner. Cascade-deletes on user removal. |
+| `xuxemon_id` | `bigint` (FK → `xuxemons.id`) | Species reference. Cascade-deletes on species removal. |
+| `food_eaten` | `integer` | Running count of xuxes consumed. Drives evolution thresholds. Defaults to `0`. |
+| `disease` | `string` (nullable) | Active disease name (`Atracón`, `Sobredosis de sucre`, `Bajón de azúcar`), or `null` if healthy. |
+| `created_at` / `updated_at` | `timestamp` | |
+
+<Note>
+  The `food_eaten` and `disease` columns were added in a separate migration (`2026_04_07`) after the initial pivot was created — a pattern that keeps the migration history readable.
+</Note>
+
+---
+
+### `user_items`
+
+Pivot table representing each item stack in a player's backpack.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | |
+| `user_id` | `bigint` (FK → `users.id`) | Owner. Cascade-deletes on user removal. |
+| `item_id` | `bigint` (FK → `items.id`) | Item reference. Cascade-deletes on item removal. |
+| `quantity` | `integer` | How many of this item the player holds. Defaults to `1`. |
+| `created_at` / `updated_at` | `timestamp` | |
+
+---
+
+### `friendships`
+
+Tracks directional friend requests and accepted friendships between players.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | |
+| `user_id` | `bigint` (FK → `users.id`) | The player who sent the request. |
+| `friend_id` | `bigint` (FK → `users.id`) | The player who received the request. |
+| `status` | `enum` | `pending` (awaiting acceptance) or `accepted`. Defaults to `pending`. |
+| `created_at` / `updated_at` | `timestamp` | |
+
+A unique constraint on `(user_id, friend_id)` prevents duplicate requests between the same pair.
+
+---
+
+### `messages`
+
+Stores the full chat history between pairs of players (short-polling architecture, polled every 2 seconds by the Angular frontend).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | |
+| `sender_id` | `bigint` (FK → `users.id`) | The author. Cascade-deletes on user removal. |
+| `receiver_id` | `bigint` (FK → `users.id`) | The recipient. Cascade-deletes on user removal. |
+| `content` | `text` | Full message body. |
+| `created_at` / `updated_at` | `timestamp` | `created_at` doubles as the send time. |
+
+---
+
+### `settings`
+
+A key-value store for global game-balance parameters, editable by administrators from the admin dashboard.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` (PK) | |
+| `key` | `string` (unique) | Setting name, e.g. `atracon_prob`. |
+| `value` | `integer` | Numeric value (probability percentage). |
+| `created_at` / `updated_at` | `timestamp` | |
+
+The seeder inserts three entries with balanced default probabilities:
+
+| Key | Default value | Effect |
+|---|---|---|
+| `atracon_prob` | `10` | 10 % chance of Atracón disease when feeding a creature. |
+| `sobredosis_prob` | `5` | 5 % chance of Sobredosis de sucre. |
+| `bajon_prob` | `5` | 5 % chance of Bajón de azúcar (+2 food required to evolve). |
+
+---
+
+## Seed data
+
+Running `php artisan migrate:fresh --seed` executes all seeders in dependency order:
+
+1. **UserSeeder** — 1 admin (`Admin#0000`, role `robot`) and 5 test players (`Jan#1001` through `Arnau#1005`). All accounts use password `admin` in development.
+2. **XuxemonSeeder** — 18 species across 3 elements and 3 evolution stages.
+3. **ItemSeeder** — 6 xuxe flavours and 3 vaccines.
+4. **SettingSeeder** — Disease probability defaults (idempotent; safe to re-run).
+5. **UserXuxemonSeeder** — Assigns starting creatures to the test players.
+6. **UserItemSeeder** — Populates starter items in each player's backpack.
+7. **FriendshipSeeder** — Creates sample friendship relations between test players.
+
+## Pivot table design rationale
+
+Standard Laravel pivot tables (declared with `belongsToMany`) are anonymous — they carry no state beyond the two foreign keys. Xoxemons' game mechanics require each creature ownership record to track `food_eaten`, `size`, and `disease` independently for every player-creature pair. Giving each pivot an explicit `id` and a dedicated Eloquent model (`UserXuxemon`, `UserItem`) means controllers can load, mutate, and save these records with the full power of Eloquent — including events, accessors, and eager loading — rather than working around the limitations of a bare pivot.

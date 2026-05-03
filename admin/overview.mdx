@@ -1,0 +1,71 @@
+---
+title: "Admin dashboard and player management"
+description: "The Xoxemons admin dashboard lets privileged users give items and creatures to players, view all accounts, and tune global game balance in real time."
+---
+
+The admin dashboard is a restricted area of the Xoxemons frontend available exclusively to accounts with `role='robot'` in the database. From it, a single privileged operator can inspect every registered player account, inject items or Xoxemons directly into a player's backpack, and adjust the global disease probabilities that govern how risky it is to feed a creature — all without touching the database directly.
+
+## How to access
+
+Only accounts with `role='robot'` can reach the `/admin` route. The default seeded administrator account is:
+
+| Field | Value |
+|-------|-------|
+| `custom_id` | `Admin#0000` |
+| Email | `admin@xoxemons.com` |
+| Password | `admin` |
+
+<Steps>
+  <Step title="Log in">
+    Navigate to `/login` and enter the admin `custom_id` and password.
+  </Step>
+  <Step title="Open the dashboard">
+    After a successful login the application redirects to `/main`. Type `/admin` in the URL bar (or follow any admin link) to reach the dashboard. Non-admin accounts are silently redirected back to `/main`.
+  </Step>
+</Steps>
+
+<Warning>
+  Change the default password before deploying to production. The seeded password `admin` is intentionally weak and only suitable for local development.
+</Warning>
+
+## Dashboard capabilities
+
+<CardGroup cols={2}>
+  <Card title="View all users" icon="users">
+    The dashboard fetches every registered account via `GET /api/admin/users` and lists each player's display name and unique `custom_id` (e.g. `Jan#1001`). Use this list to identify the target player before performing any action.
+  </Card>
+  <Card title="Give items to a player" icon="gift">
+    Select a user, choose an item type (`xuxe` for a sweet or `vacuna` for a vaccine), enter a name and quantity, then submit. The backend adds the item to the player's backpack, respecting the 20-slot capacity limit.
+  </Card>
+  <Card title="Give a random Xoxemon" icon="shuffle">
+    Select a user and click the give-Xoxemon action. The backend picks a random entry from the `xuxemons` catalogue and attaches a fresh instance to the player via the `user_xuxemons` pivot table (`food_eaten` starts at 0, no disease).
+  </Card>
+  <Card title="Tune disease probabilities" icon="sliders">
+    Adjust the three global probability values (`atracon_prob`, `sobredosis_prob`, `bajon_prob`) via the settings panel. Changes persist immediately and apply to every subsequent feed action across the entire game. See [Tuning global game balance](/admin/settings) for details.
+  </Card>
+</CardGroup>
+
+## Backpack capacity limit
+
+When giving items, the backend enforces a hard cap of **20 inventory slots**. Stackable sweets (`xuxe`) use `ceil(quantity / 5)` slots; vaccines (`vacuna`) use one slot per unit. If the target player's backpack is already full, the operation is rejected with a `400` error and the items are discarded — no partial delivery occurs.
+
+## Backend admin routes
+
+All admin endpoints sit under the `auth:api` middleware group in `routes/api.php`:
+
+```http
+GET  /api/admin/users          # List all player accounts
+POST /api/admin/give-item      # Add an item to a player's backpack
+POST /api/admin/give-xoxemon   # Give a random Xoxemon to a player
+GET  /api/admin/settings       # Read current disease probabilities
+POST /api/admin/settings       # Update disease probabilities
+```
+
+<Warning>
+  Backend admin routes currently sit inside the shared `auth:api` middleware group and **do not** have a dedicated `role:robot` middleware in `routes/api.php`. Role enforcement is performed by the `adminGuard` on the frontend and by server-side role checks inside the controllers. A future improvement is to add an explicit middleware gate so that even direct API calls from non-admin tokens are rejected at the routing level. See [Authentication, roles, and route guards](/admin/roles-and-guards) for the full security model.
+</Warning>
+
+## Related pages
+
+- [Authentication, roles, and route guards](/admin/roles-and-guards) — how JWT tokens and dual-layer guards protect the admin area
+- [Tuning global game balance with settings](/admin/settings) — detailed reference for the three disease probability values

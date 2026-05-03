@@ -1,23 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "Xoxemons",
+  "projectType": "saas",
+  "projectName": "Xoxemons",
+  "projectDescription": "A full-stack creature-collecting web game where players grow, battle, and trade Xoxemons against friends in real time.",
   "theme": "almond",
-  "colors": {
-    "primary": "#94cb04",
-    "light": "#545454"
-  },
-  "favicon": "https://media.brand.dev/288cc7c4-5cef-4376-950b-bdf0083eedae.png",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/MarcFrancesCharles/XOXEMONS"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/MarcFrancesCharles/XOXEMONS"
-    }
-  },
+  "primaryColor": "#94cb04",
+  "lightColor": "#545454",
+  "darkColor": null,
   "navigation": {
     "tabs": [
       {
@@ -98,5 +86,45 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Creature collection with growth stages (Small → Medium → Large)",
+    "PVP battle system with RNG + elemental type advantages",
+    "Mathematical inventory with fixed 20-slot backpack and item stacking",
+    "Disease & vaccine system that modifies evolution requirements",
+    "Real-time-like friend chat via short polling with RxJS",
+    "Daily reward system granting a random Xoxemon and items",
+    "Admin dashboard for managing users, items, and global game balance settings",
+    "Full JWT-based authentication with double-guard admin protection",
+    "Fully containerised with Docker Compose (frontend, backend, MySQL)"
+  ],
+  "publicApiSurface": [
+    "POST /api/register",
+    "POST /api/login",
+    "GET /api/me",
+    "POST /api/logout",
+    "PATCH /api/user/profile",
+    "DELETE /api/user/account",
+    "POST /api/user/daily-reward",
+    "GET /api/inventory",
+    "GET /api/xuxedex",
+    "POST /api/xuxemons/{pivot_id}/feed",
+    "POST /api/xuxemons/{pivot_id}/vaccinate",
+    "GET /api/friends",
+    "GET /api/friends/search",
+    "POST /api/friends/request",
+    "GET /api/friends/requests",
+    "POST /api/friends/accept/{id}",
+    "DELETE /api/friends/reject/{id}",
+    "DELETE /api/friends/{id}",
+    "GET /api/chat/{friendId}",
+    "POST /api/chat/{friendId}",
+    "GET /api/battle/{friendId}",
+    "POST /api/battle/transfer",
+    "GET /api/admin/users",
+    "POST /api/admin/give-item",
+    "POST /api/admin/give-xuxemon",
+    "GET /api/admin/settings",
+    "POST /api/admin/settings"
+  ]
 }
